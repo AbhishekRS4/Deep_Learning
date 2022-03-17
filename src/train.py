@@ -15,6 +15,7 @@ def train(model, optimizer, criterion, train_loader, device):
     train_running_loss = 0.0
     train_running_correct = 0
     num_train_samples = len(train_loader.dataset)
+    num_train_batches = len(train_loader)
 
     for data, label in train_loader:
         data = data.to(device, dtype=torch.float)
@@ -29,7 +30,7 @@ def train(model, optimizer, criterion, train_loader, device):
         loss.backward()
         optimizer.step()
 
-    train_loss = train_running_loss / num_train_samples
+    train_loss = train_running_loss / num_train_batches
     train_accuracy = 100. * train_running_correct / num_train_samples
     return train_loss, train_accuracy
 
@@ -38,6 +39,7 @@ def validate(model, criterion, valid_loader, device):
     valid_running_loss = 0.0
     valid_running_correct = 0
     num_valid_samples = len(valid_loader.dataset)
+    num_valid_batches = len(valid_loader)
 
     with torch.no_grad():
         for data, label in valid_loader:
@@ -51,7 +53,7 @@ def validate(model, criterion, valid_loader, device):
             pred_label = torch.argmax(logits, dim=1)
             valid_running_correct += (pred_label == label).sum().item()
 
-        valid_loss = valid_running_loss / num_valid_samples
+        valid_loss = valid_running_loss / num_valid_batches
         valid_accuracy = 100. * valid_running_correct / num_valid_samples
     return valid_loss, valid_accuracy
 
