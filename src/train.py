@@ -101,7 +101,7 @@ def train_classifier(FLAGS):
     for epoch in range(1, FLAGS.num_epochs+1):
         time_start = time.time()
         train_loss, train_acc = train(model, optimizer, criterion, train_loader, device)
-        valid_loss, valid_acc = validate(model, criterion, val_loader, device)
+        valid_loss, valid_acc = validate(model, criterion, valid_loader, device)
         time_end = time.time()
         print(f"Epoch: {epoch}/{FLAGS.num_epochs}, time: {time_end-time_start:.3f} sec.")
         print(f"Train Loss: {train_loss:.4f}, Train Accuracy: {train_acc:.3f}")
