@@ -117,7 +117,7 @@ def train_classifier(FLAGS):
                 valid_acc,
             ]
         )
-        torch.save(model.state_dict(), os.path.join(dir_model, file_model))
+        torch.save(model.state_dict(), os.path.join(dir_model, f"{file_model}_{epoch}.pt"))
     print("Training of cassava leaf image classification complete!!!!")
     csv_writer.close()
     return
