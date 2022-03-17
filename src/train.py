@@ -59,9 +59,9 @@ def validate(model, criterion, valid_loader, device):
     return valid_loss, valid_accuracy
 
 def train_classifier(FLAGS):
-    try:
+    if torch.cuda.is_available():
         device = torch.device("cuda")
-    except:
+    else:
         print("CUDA device not found, so exiting....")
         sys.exit(0)
 
