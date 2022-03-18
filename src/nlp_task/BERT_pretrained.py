@@ -9,7 +9,7 @@ import tensorflow as tf
 import torch
 from sklearn import preprocessing
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
-from keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.preprocessing.sequence import pad_sequences
 from sklearn.model_selection import train_test_split
 from pytorch_pretrained_bert import BertTokenizer, BertConfig
 from pytorch_pretrained_bert import BertAdam, BertForSequenceClassification
@@ -22,9 +22,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 ##### UNCOMMENT BELOW FOR GPU FUNCTIONING
-# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# n_gpu = torch.cuda.device_count()
-# torch.cuda.get_device_name(0)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+n_gpu = torch.cuda.device_count()
+torch.cuda.get_device_name(0)
 
 PATH_DATA = os.path.abspath("..\\..\\data")
 
@@ -43,7 +43,8 @@ tweets = ["[CLS] " + tweet + " [SEP]" for tweet in df.OriginalTweet.values]
 le = preprocessing.LabelEncoder()
 le.fit(df.Sentiment)
 labels = le.transform(df.Sentiment)
-print(labels)
+unique, counts = np.unique(labels, return_counts=True)
+print(dict(zip(unique, counts)))
 
 # Tokenize with BERT tokenizer
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
@@ -74,7 +75,6 @@ train_inputs, validation_inputs, train_labels, validation_labels = train_test_sp
                                                                                     random_state=2018, test_size=0.1)
 train_masks, validation_masks, _, _ = train_test_split(attention_masks, input_ids,
                                                        random_state=2018, test_size=0.1)
-print(train_labels)
 # Convert all of our data into torch tensors, the required datatype for our model
 train_inputs = torch.tensor(train_inputs)
 validation_inputs = torch.tensor(validation_inputs)
@@ -85,7 +85,7 @@ validation_masks = torch.tensor(validation_masks)
 
 # Select a batch size for training. For fine-tuning BERT on a specific task, the authors recommend a batch size of
 # 16 or 32
-batch_size = 32
+batch_size = 2
 
 # Create an iterator of our data with torch DataLoader. This helps save on memory during training because, unlike a for
 # loop, with an iterator the entire dataset does not need to be loaded into memory
@@ -99,7 +99,7 @@ validation_sampler = SequentialSampler(validation_data)
 validation_dataloader = DataLoader(validation_data, sampler=validation_sampler, batch_size=batch_size)
 
 # Load BertForSequenceClassification, the pretrained BERT model with a single linear classification layer on top.
-model = BertForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=2)
+model = BertForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=5)
 model.cuda()
 
 param_optimizer = list(model.named_parameters())
@@ -147,6 +147,8 @@ for _ in trange(epochs, desc="Epoch"):
         # Clear out the gradients (by default they accumulate)
         optimizer.zero_grad()
         # Forward pass
+        b_input_ids = torch.tensor(b_input_ids).to(device).long()
+        b_labels = torch.tensor(b_labels).to(device).long()
         loss = model(b_input_ids, token_type_ids=None, attention_mask=b_input_mask, labels=b_labels)
         train_loss_set.append(loss.item())
         # Backward pass
@@ -176,6 +178,8 @@ for _ in trange(epochs, desc="Epoch"):
         batch = tuple(t.to(device) for t in batch)
         # Unpack the inputs from our dataloader
         b_input_ids, b_input_mask, b_labels = batch
+        b_input_ids = torch.tensor(b_input_ids).to(device).long()
+        b_labels = torch.tensor(b_labels).to(device).long()
         # Telling the model not to compute or store gradients, saving memory and speeding up validation
         with torch.no_grad():
             # Forward pass, calculate logit predictions
