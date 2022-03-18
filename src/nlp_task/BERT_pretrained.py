@@ -7,12 +7,14 @@ import tensorflow as tf
 # print('Found GPU at: {}'.format(device_name))
 
 import torch
+from sklearn import preprocessing
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
 from keras.preprocessing.sequence import pad_sequences
 from sklearn.model_selection import train_test_split
 from pytorch_pretrained_bert import BertTokenizer, BertConfig
 from pytorch_pretrained_bert import BertAdam, BertForSequenceClassification
 from tqdm import tqdm, trange
+
 import pandas as pd
 import io
 import os
@@ -34,7 +36,14 @@ tweets = df.OriginalTweet.values
 
 # add BERT tokens: CLS for classification and SEP for separator
 tweets = ["[CLS] " + tweet + " [SEP]" for tweet in df.OriginalTweet.values]
-labels = df.Sentiment.values
+# labels = df.Sentiment.values
+
+
+# {'Extremely Negative': 5481, 'Extremely Positive': 6624, 'Negative': 9917, 'Neutral': 7713, 'Positive': 11422}
+le = preprocessing.LabelEncoder()
+le.fit(df.Sentiment)
+labels = le.transform(df.Sentiment)
+print(labels)
 
 # Tokenize with BERT tokenizer
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
@@ -65,7 +74,7 @@ train_inputs, validation_inputs, train_labels, validation_labels = train_test_sp
                                                                                     random_state=2018, test_size=0.1)
 train_masks, validation_masks, _, _ = train_test_split(attention_masks, input_ids,
                                                        random_state=2018, test_size=0.1)
-
+print(train_labels)
 # Convert all of our data into torch tensors, the required datatype for our model
 train_inputs = torch.tensor(train_inputs)
 validation_inputs = torch.tensor(validation_inputs)
