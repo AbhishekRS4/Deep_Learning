@@ -1,10 +1,6 @@
-from time import time
 import pandas as pd
 import cv2
-import time
 import torch
-import torchvision
-import torchvision.transforms as transforms
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset,DataLoader
@@ -25,13 +21,13 @@ from tqdm import tqdm
 
 CFG = {
     'TRAIN_PATH': '../datasets/train_images',
-    'split': .2,
+    'test_split': .2,
+    'val_split': .1,
     'seed': 42,
-    'img_size': 128,
     'epochs': 1,
     'train_bs': 16,
     'valid_bs': 32,
-    'size': 256,
+    'size': 128,
     'T_0': 10,
     'lr': 1e-4,
     'min_lr': 1e-6,
@@ -39,9 +35,9 @@ CFG = {
     'num_workers': 4,
     'accum_iter': 2,
     'verbose_step': 1,
-    'device': 'cuda'
+    'device': 'cuda',
+    'model_arch':'base_ckpt'
 }
-
 
 def get_transforms(*, data):
     
@@ -93,12 +89,18 @@ class TrainDataset(Dataset):
     
 
 
-def prepare_dataloader(df, split):
-    train_ = df.loc[split:].reset_index(drop=True)
-    valid_ = df.loc[:split].reset_index(drop=True)
-        
+def prepare_dataloader(df, test_split, val_split):
+    test_split = CFG['test_split']*len(df)
+    train = df.loc[test_split:,].reset_index(drop=True)
+    test_ = df.loc[:test_split,].reset_index(drop=True)
+    val_split = CFG['val_split']*len(train)
+    train_ = train.loc[val_split:,].reset_index(drop=True)
+    valid_ = train.loc[:val_split,].reset_index(drop=True)
+    
+    
     train_ds = TrainDataset(train_, transform=get_transforms(data='train'))
     valid_ds = TrainDataset(valid_, transform=get_transforms(data='valid'))
+    test_ds = TrainDataset(test_, transform=get_transforms(data='valid'))
     
     train_loader = torch.utils.data.DataLoader(
         train_ds,
@@ -115,21 +117,30 @@ def prepare_dataloader(df, split):
         shuffle=False,
         pin_memory=False,
     )
-    return train_loader, val_loader
-
+    tst_loader = torch.utils.data.DataLoader(
+        test_ds, 
+        batch_size=CFG['valid_bs'],
+        num_workers=CFG['num_workers'],
+        shuffle=False,
+        pin_memory=False,
+    )
+    return train_loader, val_loader, tst_loader
 
 
 class Network(nn.Module):
     def __init__(self, n_class):
         super().__init__()
-        self.conv1 = nn.Conv2d(3, 6, 5)
-        self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(6, 16, 5)
-        self.fc1 = nn.Linear(16 * 5 * 5, 120)
-        self.fc2 = nn.Linear(120, 84)
-        self.fc3 = nn.Linear(84, n_class)
+        # 3 RGB channels, applying kernel size 3, output image size 126, number of output channels 32 
+        self.conv1 = nn.Conv2d(in_channels = 3, out_channels=32, kernel_size=3)
+        # 3 RGB channels, applying Max Pooling size (2,2) with stride 2, output image size 62, output channels 32 
+        self.pool = nn.MaxPool2d(kernel_size = 2, stride = 2)
+        # 3 RGB channels, applying kernel size 3 with stride 1, output image size 60, output channels 16
+        self.conv2 = nn.Conv2d(in_channels = 32, out_channels=16, kernel_size=3)
+        self.fc1 = nn.Linear(16*30*30, 128)
+        self.fc2 = nn.Linear(128, 64)
+        self.fc3 = nn.Linear(64, n_class)
 
-    def forward(self):
+    def forward(self,x):
         x = self.pool(F.relu(self.conv1(x)))
         x = self.pool(F.relu(self.conv2(x)))
         x = torch.flatten(x, 1) # flatten all dimensions except batch
@@ -139,12 +150,11 @@ class Network(nn.Module):
         return x
 
 
-def train(epoch, model, optimizer,criterion, train_loader, device):
-    print('Training')
+def train(model, optimizer,criterion, train_loader, device):
     model.train()
     train_running_loss = 0.0
     train_running_correct = 0
-    for i, data in tqdm(enumerate(train_loader)):
+    for data in tqdm(train_loader):
         data, target = data[0].to(device), data[1].to(device)
         optimizer.zero_grad()
         outputs = model(data)
@@ -160,14 +170,12 @@ def train(epoch, model, optimizer,criterion, train_loader, device):
     return train_loss, train_accuracy
 
         
-def valid(epoch, model, criterion, val_loader, device):
-    t = time.time()
-    print('Validating')
+def valid(model, criterion, val_loader, device):
     model.eval()
     val_running_loss = 0.0
     val_running_correct = 0
     with torch.no_grad():
-        for i, data in tqdm(enumerate(val_loader)):
+        for data in tqdm(val_loader):
             data, target = data[0].to(device).float(), data[1].to(device).long()
             outputs = model(data)
             loss = criterion(outputs, target)
@@ -178,38 +186,39 @@ def valid(epoch, model, criterion, val_loader, device):
         
         val_loss = val_running_loss/len(val_loader.dataset)
         val_accuracy = 100. * val_running_correct/len(val_loader.dataset)        
-        return val_loss, val_accuracy
+        return model, val_loss, val_accuracy
+
 
 
 
 def main():
     device = CFG['device']
-    train_df = pd.read_csv('../datasets/train.csv')
-    split_idx = CFG['split']*len(train_df)
+    df = pd.read_csv('../datasets/train.csv')
 
-    train_loader, val_loader = prepare_dataloader(train_df, split_idx)
+    train_loader, val_loader, test_loader = prepare_dataloader(df, CFG['test_split'], CFG['val_split'])
     
-    model = Network(train_df.label.nunique())
+    model = Network(df.label.nunique())
     
     if torch.cuda.is_available():
         model = model.cuda()
         
     optimizer = torch.optim.Adam(model.parameters(), lr=CFG['lr'], weight_decay=CFG['weight_decay'])
     criterion = torch.nn.CrossEntropyLoss()
-
+    
+    validation_auc = 0
     for epoch in range(CFG['epochs']):
 
-        train_loss , train_auc = train(epoch, model, optimizer, criterion, train_loader, device)
+        train_loss , train_auc = train(model, optimizer, criterion, train_loader, device)
 
-        val_loss, val_auc = valid(epoch, model, criterion, val_loader, device)
-        print(f"=========Epoch: {epoch}/{CFG['epochs']}============")
+        model , val_loss, val_auc = valid(model, criterion, val_loader, device)
+        print(f"=========Epoch: {epoch+1}/{CFG['epochs']}============")
         print(f"Train Loss: {train_loss:.4f}, Train Acc: {train_auc:.2f}")
-        print(f'Val Loss: {val_loss:.4f}, Val Acc: {val_auc:.2f}')
-        if val_auc>validation_auc:
-            print("saving the best model")
-            torch.save(model.state_dict(),'{}_test'.format(CFG['model_arch']))
-            validation_auc = val_auc
-
+        print(f'Validation Loss: {val_loss:.4f}, Validation Acc: {val_auc:.2f}')
+            
+            
+            
+    _, test_loss, test_auc = valid(model, criterion, test_loader, device)
+    print(f'Test Loss: {test_loss:.4f}, Test Acc: {test_auc:.2f}')
 
 
 if __name__ == '__main__':
