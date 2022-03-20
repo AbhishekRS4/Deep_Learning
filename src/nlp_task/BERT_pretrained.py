@@ -256,6 +256,8 @@ for batch in prediction_dataloader:
     batch = tuple(t.to(device) for t in batch)
     # Unpack the inputs from our dataloader
     b_input_ids, b_input_mask, b_labels = batch
+    b_input_ids = torch.tensor(b_input_ids).to(device).long()
+    b_labels = torch.tensor(b_labels).to(device).long()
     # Telling the model not to compute or store gradients, saving memory and speeding up prediction
     with torch.no_grad():
         # Forward pass, calculate logit predictions
