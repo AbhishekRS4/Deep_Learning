@@ -26,9 +26,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 n_gpu = torch.cuda.device_count()
 torch.cuda.get_device_name(0)
 
-PATH_DATA = os.path.abspath("..\\..\\data")
-
-df = pd.read_csv(os.path.join(PATH_DATA, "Corona_NLP_train.csv"), header=0, encoding='latin-1')
+df = pd.read_csv("Corona_NLP_train.csv", header=0, encoding='latin-1')
 
 print(df.sample(10))
 
@@ -53,7 +51,7 @@ print("Tokenize the second tweet:")
 print(tokenized_texts[1])
 
 # max tweet length = 280. Lets use this
-MAX_LEN = 280
+MAX_LEN = 128
 
 # Use the BERT tokenizer to convert the tokens to their index numbers in the BERT vocabulary
 input_ids = [tokenizer.convert_tokens_to_ids(x) for x in tokenized_texts]
@@ -85,7 +83,7 @@ validation_masks = torch.tensor(validation_masks)
 
 # Select a batch size for training. For fine-tuning BERT on a specific task, the authors recommend a batch size of
 # 16 or 32
-batch_size = 2
+batch_size = 4
 
 # Create an iterator of our data with torch DataLoader. This helps save on memory during training because, unlike a for
 # loop, with an iterator the entire dataset does not need to be loaded into memory
@@ -204,7 +202,7 @@ for _ in trange(epochs, desc="Epoch"):
 # plt.show()
 
 #### TESTING ####
-df = pd.read_csv(os.path.join(PATH_DATA, "Corona_NLP_test.csv"), header=0, encoding='latin-1')
+df = pd.read_csv("Corona_NLP_test.csv", header=0, encoding='latin-1')
 
 tweets = df.OriginalTweet.values
 
@@ -220,7 +218,7 @@ labels = le.transform(df.Sentiment)
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
 tokenized_texts = [tokenizer.tokenize(twt) for twt in tweets]
 
-MAX_LEN = 280
+MAX_LEN = 128
 
 # Use the BERT tokenizer to convert the tokens to their index numbers in the BERT vocabulary
 input_ids = [tokenizer.convert_tokens_to_ids(x) for x in tokenized_texts]
