@@ -196,9 +196,95 @@ for _ in trange(epochs, desc="Epoch"):
 
     print("Validation Accuracy: {}".format(eval_accuracy / nb_eval_steps))
 
-plt.figure(figsize=(15,8))
-plt.title("Training loss")
-plt.xlabel("Batch")
-plt.ylabel("Loss")
-plt.plot(train_loss_set)
-plt.show()
+# plt.figure(figsize=(15,8))
+# plt.title("Training loss")
+# plt.xlabel("Batch")
+# plt.ylabel("Loss")
+# plt.plot(train_loss_set)
+# plt.show()
+
+#### TESTING ####
+df = pd.read_csv(os.path.join(PATH_DATA, "Corona_NLP_test.csv"), header=0, encoding='latin-1')
+
+tweets = df.OriginalTweet.values
+
+# add BERT tokens: CLS for classification and SEP for separator
+tweets = ["[CLS] " + tweet + " [SEP]" for tweet in df.OriginalTweet.values]
+# labels = df.Sentiment.values
+
+
+le = preprocessing.LabelEncoder()
+le.fit(df.Sentiment)
+labels = le.transform(df.Sentiment)
+
+tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
+tokenized_texts = [tokenizer.tokenize(twt) for twt in tweets]
+
+MAX_LEN = 280
+
+# Use the BERT tokenizer to convert the tokens to their index numbers in the BERT vocabulary
+input_ids = [tokenizer.convert_tokens_to_ids(x) for x in tokenized_texts]
+# Pad our input tokens
+input_ids = pad_sequences(input_ids, maxlen=MAX_LEN, dtype="long", truncating="post", padding="post")
+# Create attention masks
+attention_masks = []
+
+# Create a mask of 1s for each token followed by 0s for padding
+for seq in input_ids:
+    seq_mask = [float(i > 0) for i in seq]
+    attention_masks.append(seq_mask)
+
+prediction_inputs = torch.tensor(input_ids)
+prediction_masks = torch.tensor(attention_masks)
+prediction_labels = torch.tensor(labels)
+
+batch_size = 2
+
+prediction_data = TensorDataset(prediction_inputs, prediction_masks, prediction_labels)
+prediction_sampler = SequentialSampler(prediction_data)
+prediction_dataloader = DataLoader(prediction_data, sampler=prediction_sampler, batch_size=batch_size)
+
+# Prediction on test set
+
+# Put model in evaluation mode
+model.eval()
+
+# Tracking variables
+predictions, true_labels = [], []
+
+# Predict
+for batch in prediction_dataloader:
+    # Add batch to GPU
+    batch = tuple(t.to(device) for t in batch)
+    # Unpack the inputs from our dataloader
+    b_input_ids, b_input_mask, b_labels = batch
+    # Telling the model not to compute or store gradients, saving memory and speeding up prediction
+    with torch.no_grad():
+        # Forward pass, calculate logit predictions
+        logits = model(b_input_ids, token_type_ids=None, attention_mask=b_input_mask)
+
+    # Move logits and labels to CPU
+    logits = logits.detach().cpu().numpy()
+    label_ids = b_labels.to('cpu').numpy()
+
+    # Store predictions and true labels
+    predictions.append(logits)
+    true_labels.append(label_ids)
+
+# Import and evaluate each test batch using Matthew's correlation coefficient
+from sklearn.metrics import matthews_corrcoef
+matthews_set = []
+
+for i in range(len(true_labels)):
+  matthews = matthews_corrcoef(true_labels[i],
+                 np.argmax(predictions[i], axis=1).flatten())
+  matthews_set.append(matthews)
+
+print(matthews_set)
+
+# Flatten the predictions and true values for aggregate Matthew's evaluation on the whole dataset
+flat_predictions = [item for sublist in predictions for item in sublist]
+flat_predictions = np.argmax(flat_predictions, axis=1).flatten()
+flat_true_labels = [item for sublist in true_labels for item in sublist]
+
+print(matthews_corrcoef(flat_true_labels, flat_predictions))
