@@ -5,6 +5,7 @@ from sklearn import preprocessing
 from sklearn.model_selection import train_test_split
 
 from keras.preprocessing.text import Tokenizer
+from keras.preprocessing.sequence import pad_sequences
 
 from gensim.scripts.glove2word2vec import glove2word2vec
 
@@ -61,9 +62,27 @@ def clean_text(text):
     text = " ".join(token_list)
     return text
 
-def glove(X_train, X_val, X_test):
+def glove(data):
     t = Tokenizer()
-    t.fit_on_texts(X_train)
+    t.fit_on_texts(data)
+    #print(t.word_index)
     vocab_size = len(t.word_index) + 1
-    encoded_docs = t.texts_to_sequences(X_train)
-    print(encoded_docs)
+    X_train_final = t.texts_to_sequences(data)
+    X_train_final = pad_sequences(X_train_final, maxlen=45, padding = "post")
+    print(X_train_final[0])
+    embeddings_index = dict()
+    f = open('nlp_data/glove.twitter.27B.25d.txt')
+    for line in f:
+        values = line.split()
+        word = values[0]
+        coefs = np.asarray(values[1:], dtype='float32')
+        embeddings_index[word] = coefs
+    f.close()
+    print('Loaded %s word vectors.' % len(embeddings_index))
+    embedding_matrix = np.zeros((vocab_size, 25))
+    for word, i in t.word_index.items():
+        embedding_vector = embeddings_index.get(word)
+        if embedding_vector is not None:
+            embedding_matrix[i] = embedding_vector
+    return embedding_matrix, X_train_final, vocab_size
+    #print(encoded_docs)
