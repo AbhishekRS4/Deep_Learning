@@ -5,6 +5,10 @@ import tensorflow as tf
 # if device_name != '/device:GPU:0':
 #   raise SystemError('GPU device not found')
 # print('Found GPU at: {}'.format(device_name))
+import sys
+
+log = open("print_log.log", "a")
+sys.stdout = log
 
 import torch
 from sklearn import preprocessing
@@ -14,12 +18,39 @@ from sklearn.model_selection import train_test_split
 from pytorch_pretrained_bert import BertTokenizer, BertConfig
 from pytorch_pretrained_bert import BertAdam, BertForSequenceClassification
 from tqdm import tqdm, trange
+import re, string
+import emoji
 
 import pandas as pd
 import io
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+
+
+def cleaner(tweet):
+    # remove links
+    tweet = "".join(re.sub("(\w+:\/\/\S+)", " ", tweet))
+
+    # remove hashtags
+    tweet = "".join(re.sub("(#[A-Za-z0-9_]+)", " ", tweet))
+
+    # remove user mention
+    tweet = "".join(re.sub("(@[A-Za-z0-9_]+)", " ", tweet))
+
+    # remove none alphanumeric and aposthrope
+    tweet = "".join(re.sub("([^0-9A-Za-z \t'])", " ", tweet))
+
+    # remove extra whitespace
+    tweet = " ".join(tweet.split())
+
+    # remove emoji unicode
+    tweet = "".join(c for c in tweet if c not in emoji.UNICODE_EMOJI)  # Remove Emojis
+
+    # remove leading and trailing space
+    tweet = tweet.strip()
+
+    return tweet
 
 ##### UNCOMMENT BELOW FOR GPU FUNCTIONING
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -29,6 +60,8 @@ torch.cuda.get_device_name(0)
 df = pd.read_csv("Corona_NLP_train.csv", header=0, encoding='latin-1')
 
 print(df.sample(10))
+
+df['OriginalTweet'] = df['OriginalTweet'].apply(lambda x: cleaner(x))
 
 tweets = df.OriginalTweet.values
 
@@ -45,12 +78,12 @@ unique, counts = np.unique(labels, return_counts=True)
 print(dict(zip(unique, counts)))
 
 # Tokenize with BERT tokenizer
-tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
+tokenizer = BertTokenizer.from_pretrained('bert-base-uncased') #, do_lower_case=True)
 tokenized_texts = [tokenizer.tokenize(twt) for twt in tweets]
 print("Tokenize the second tweet:")
 print(tokenized_texts[1])
 
-# max tweet length = 280. Lets use this
+# advised length
 MAX_LEN = 128
 
 # Use the BERT tokenizer to convert the tokens to their index numbers in the BERT vocabulary
@@ -83,7 +116,7 @@ validation_masks = torch.tensor(validation_masks)
 
 # Select a batch size for training. For fine-tuning BERT on a specific task, the authors recommend a batch size of
 # 16 or 32
-batch_size = 4
+batch_size = 32
 
 # Create an iterator of our data with torch DataLoader. This helps save on memory during training because, unlike a for
 # loop, with an iterator the entire dataset does not need to be loaded into memory
@@ -122,7 +155,7 @@ t = []
 train_loss_set = []
 
 # Number of training epochs (authors recommend between 2 and 4)
-epochs = 4
+epochs = 10
 
 # trange is a tqdm wrapper around the normal python range
 for _ in trange(epochs, desc="Epoch"):
@@ -194,16 +227,16 @@ for _ in trange(epochs, desc="Epoch"):
 
     print("Validation Accuracy: {}".format(eval_accuracy / nb_eval_steps))
 
-# plt.figure(figsize=(15,8))
-# plt.title("Training loss")
-# plt.xlabel("Batch")
-# plt.ylabel("Loss")
-# plt.plot(train_loss_set)
-# plt.show()
+plt.figure(figsize=(15,8))
+plt.title("Training loss")
+plt.xlabel("Batch")
+plt.ylabel("Loss")
+plt.plot(train_loss_set)
+plt.savefig('loss_BERT_pretrained.png', bbox_inches='tight')
 
 #### TESTING ####
 df = pd.read_csv("Corona_NLP_test.csv", header=0, encoding='latin-1')
-
+df['OriginalTweet'] = df['OriginalTweet'].apply(lambda x: cleaner(x))
 tweets = df.OriginalTweet.values
 
 # add BERT tokens: CLS for classification and SEP for separator
@@ -217,8 +250,6 @@ labels = le.transform(df.Sentiment)
 
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
 tokenized_texts = [tokenizer.tokenize(twt) for twt in tweets]
-
-MAX_LEN = 128
 
 # Use the BERT tokenizer to convert the tokens to their index numbers in the BERT vocabulary
 input_ids = [tokenizer.convert_tokens_to_ids(x) for x in tokenized_texts]
@@ -235,8 +266,6 @@ for seq in input_ids:
 prediction_inputs = torch.tensor(input_ids)
 prediction_masks = torch.tensor(attention_masks)
 prediction_labels = torch.tensor(labels)
-
-batch_size = 2
 
 prediction_data = TensorDataset(prediction_inputs, prediction_masks, prediction_labels)
 prediction_sampler = SequentialSampler(prediction_data)
