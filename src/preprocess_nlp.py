@@ -27,6 +27,11 @@ def preprocess(df_train, df_test):
 
     df_train['Sentiment'] = le.fit_transform(df_train['Sentiment'])
     df_test['Sentiment'] = le.fit_transform(df_test['Sentiment'])
+    # df_train['Sentiment'] = [label+2 if label == 0 else label for label in df_train['Sentiment']]
+    # df_train['Sentiment'] = [label+3 if label == 1 else label for label in df_train['Sentiment']]
+    # df_test['Sentiment'] = [label+2 if label == 0 else label for label in df_test['Sentiment']]
+    # df_test['Sentiment'] = [label+3 if label == 1 else label for label in df_test['Sentiment']]
+
 
     df_train['OriginalTweet'] = df_train['OriginalTweet'].apply(lambda x: clean_text(x)) 
     df_test['OriginalTweet'] = df_test['OriginalTweet'].apply(lambda x: clean_text(x))
@@ -62,27 +67,33 @@ def clean_text(text):
     text = " ".join(token_list)
     return text
 
-def glove(data):
-    t = Tokenizer()
-    t.fit_on_texts(data)
-    #print(t.word_index)
+def glove(X_train, X_test):
+    t = Tokenizer(oov_token = True)
+    t.fit_on_texts(X_train) # make up an internal dictionary of training vocabulary
+
     vocab_size = len(t.word_index) + 1
-    X_train_final = t.texts_to_sequences(data)
+    # map both datasets to the integer representation of the dictionary
+    X_train_final = t.texts_to_sequences(X_train)
+    X_test_final = t.texts_to_sequences(X_test)
+
+    # pad sequences to have uniform size
     X_train_final = pad_sequences(X_train_final, maxlen=45, padding = "post")
-    print(X_train_final[0])
+    X_test_final = pad_sequences(X_test_final, maxlen=45, padding = "post")
+
+    # create dictionary that contains the vector representation of each word present in the GloVe set
+    f = open('nlp_data/glove.twitter.27B.200d.txt')
     embeddings_index = dict()
-    f = open('nlp_data/glove.twitter.27B.25d.txt')
     for line in f:
         values = line.split()
         word = values[0]
         coefs = np.asarray(values[1:], dtype='float32')
         embeddings_index[word] = coefs
     f.close()
-    print('Loaded %s word vectors.' % len(embeddings_index))
-    embedding_matrix = np.zeros((vocab_size, 25))
+
+    # create embedding matrix that contains all the vector representations for each word, ordered by their Tokenizer index
+    embedding_matrix = np.zeros((vocab_size, 200))
     for word, i in t.word_index.items():
         embedding_vector = embeddings_index.get(word)
         if embedding_vector is not None:
             embedding_matrix[i] = embedding_vector
-    return embedding_matrix, X_train_final, vocab_size
-    #print(encoded_docs)
+    return embedding_matrix, X_train_final, X_test_final, vocab_size
