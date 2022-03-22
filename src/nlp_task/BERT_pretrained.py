@@ -1,10 +1,4 @@
 import tensorflow as tf
-
-##### UNCOMMENT BELOW FOR GPU FUNCTIONING
-# device_name = tf.test.gpu_device_name()
-# if device_name != '/device:GPU:0':
-#   raise SystemError('GPU device not found')
-# print('Found GPU at: {}'.format(device_name))
 import sys
 
 log = open("print_log.log", "a")
@@ -12,20 +6,21 @@ sys.stdout = log
 
 import torch
 from sklearn import preprocessing
+from sklearn.metrics import accuracy_score
+from sklearn.metrics import classification_report, confusion_matrix
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from sklearn.model_selection import train_test_split
 from pytorch_pretrained_bert import BertTokenizer, BertConfig
 from pytorch_pretrained_bert import BertAdam, BertForSequenceClassification
-from tqdm import tqdm, trange
-import re, string
+from tqdm import trange
+import re
 import emoji
 
 import pandas as pd
-import io
-import os
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 
 def cleaner(tweet):
@@ -59,18 +54,16 @@ torch.cuda.get_device_name(0)
 
 df = pd.read_csv("Corona_NLP_train.csv", header=0, encoding='latin-1')
 
-print(df.sample(10))
-
 df['OriginalTweet'] = df['OriginalTweet'].apply(lambda x: cleaner(x))
-
 tweets = df.OriginalTweet.values
 
 # add BERT tokens: CLS for classification and SEP for separator
 tweets = ["[CLS] " + tweet + " [SEP]" for tweet in df.OriginalTweet.values]
-# labels = df.Sentiment.values
-
 
 # {'Extremely Negative': 5481, 'Extremely Positive': 6624, 'Negative': 9917, 'Neutral': 7713, 'Positive': 11422}
+# labels = df['Sentiment'].map({'Extremely Negative': 0, 'Negative': 1, 'Neutral': 2, 'Positive': 3, 'Extremely Positive': 4})
+# print(labels.value_counts())
+
 le = preprocessing.LabelEncoder()
 le.fit(df.Sentiment)
 labels = le.transform(df.Sentiment)
@@ -78,10 +71,10 @@ unique, counts = np.unique(labels, return_counts=True)
 print(dict(zip(unique, counts)))
 
 # Tokenize with BERT tokenizer
-tokenizer = BertTokenizer.from_pretrained('bert-base-uncased') #, do_lower_case=True)
+tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 tokenized_texts = [tokenizer.tokenize(twt) for twt in tweets]
-print("Tokenize the second tweet:")
-print(tokenized_texts[1])
+print("Tokenize the first tweet:")
+print(tokenized_texts[0])
 
 # advised length
 MAX_LEN = 128
@@ -131,6 +124,9 @@ validation_dataloader = DataLoader(validation_data, sampler=validation_sampler, 
 
 # Load BertForSequenceClassification, the pretrained BERT model with a single linear classification layer on top.
 model = BertForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=5)
+
+# randomize model?
+
 model.cuda()
 
 param_optimizer = list(model.named_parameters())
@@ -234,21 +230,20 @@ plt.ylabel("Loss")
 plt.plot(train_loss_set)
 plt.savefig('loss_BERT_pretrained.png', bbox_inches='tight')
 
-#### TESTING ####
+#################################### TESTING ########################################
 df = pd.read_csv("Corona_NLP_test.csv", header=0, encoding='latin-1')
 df['OriginalTweet'] = df['OriginalTweet'].apply(lambda x: cleaner(x))
 tweets = df.OriginalTweet.values
 
 # add BERT tokens: CLS for classification and SEP for separator
 tweets = ["[CLS] " + tweet + " [SEP]" for tweet in df.OriginalTweet.values]
-# labels = df.Sentiment.values
 
-
+# labels = df['Sentiment'].map({'Extremely Negative': 0, 'Negative': 1, 'Neutral': 2, 'Positive': 3, 'Extremely Positive': 4})
 le = preprocessing.LabelEncoder()
 le.fit(df.Sentiment)
 labels = le.transform(df.Sentiment)
 
-tokenizer = BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True)
+tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 tokenized_texts = [tokenizer.tokenize(twt) for twt in tweets]
 
 # Use the BERT tokenizer to convert the tokens to their index numbers in the BERT vocabulary
@@ -316,4 +311,23 @@ flat_predictions = [item for sublist in predictions for item in sublist]
 flat_predictions = np.argmax(flat_predictions, axis=1).flatten()
 flat_true_labels = [item for sublist in true_labels for item in sublist]
 
-print(matthews_corrcoef(flat_true_labels, flat_predictions))
+print("matthews corrcoef:", matthews_corrcoef(flat_true_labels, flat_predictions))
+
+# labels = ['Extremely Negative', 'Negative', 'Neutral', 'Positive', 'Extremely Positive']
+
+accuracy = accuracy_score(y_true=flat_true_labels, y_pred=flat_predictions) # Also gives the accuracy for the two lists actual and pred
+print("Accuracy: %.2lf " % (accuracy*100))
+
+print()
+print()
+print("Classification Report,")
+print(classification_report(flat_true_labels, flat_predictions))
+
+print()
+print()
+print("Confusion Matrix,")
+cf_matrix = confusion_matrix(flat_true_labels, flat_predictions)
+cf_matrix = pd.DataFrame(cf_matrix)
+plt.figure(figsize=(10,7))
+sns.heatmap(cf_matrix, annot=True)
+plt.savefig('confusion_matrix.png', bbox_inches='tight')
