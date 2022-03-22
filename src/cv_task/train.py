@@ -112,10 +112,10 @@ def train_classifier(FLAGS):
         csv_writer.write_row(
             [
                 epoch,
-                train_loss,
-                valid_loss,
-                train_acc,
-                valid_acc,
+                round(train_loss, 6),
+                round(valid_loss, 6),
+                round(train_acc, 6),
+                round(valid_acc, 6),
             ]
         )
         torch.save(model.state_dict(), os.path.join(dir_model, f"{file_model}_{epoch}.pt"))
