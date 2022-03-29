@@ -1,130 +1,14 @@
-import pandas as pd
-import cv2
+import os
+import sys
+import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import Dataset,DataLoader
+from dataset import split_dataset, get_dataloaders_for_training
 
-from albumentations import (
-    HorizontalFlip, VerticalFlip, IAAPerspective, ShiftScaleRotate, CLAHE, RandomRotate90,
-    Transpose, ShiftScaleRotate, Blur, OpticalDistortion, GridDistortion, HueSaturationValue,
-    IAAAdditiveGaussianNoise, GaussNoise, MotionBlur, MedianBlur, IAAPiecewiseAffine, RandomResizedCrop,
-    IAASharpen, IAAEmboss, RandomBrightnessContrast, Flip, OneOf, Compose, Normalize, Cutout, CoarseDropout, ShiftScaleRotate, CenterCrop, Resize
-)
-
-from albumentations.pytorch import ToTensorV2
-
+import argparse
 from tqdm import tqdm
 
-
-
-
-CFG = {
-    'TRAIN_PATH': '../datasets/train_images',
-    'test_split': .2,
-    'val_split': .1,
-    'seed': 42,
-    'epochs': 1,
-    'train_bs': 16,
-    'valid_bs': 32,
-    'size': 128,
-    'T_0': 10,
-    'lr': 1e-4,
-    'min_lr': 1e-6,
-    'weight_decay':1e-6,
-    'num_workers': 4,
-    'accum_iter': 2,
-    'verbose_step': 1,
-    'device': 'cuda',
-    'model_arch':'base_ckpt'
-}
-
-def get_transforms(*, data):
-    
-    if data == 'train':
-        return Compose([
-            RandomResizedCrop(CFG['size'], CFG['size']),
-            Transpose(p=0.5),
-            HorizontalFlip(p=0.5),
-            VerticalFlip(p=0.5),
-            ShiftScaleRotate(p=0.5),
-            Normalize(
-                mean=[0.485, 0.456, 0.406],
-                std=[0.229, 0.224, 0.225],
-            ),
-            ToTensorV2(),
-            ])
-
-    elif data == 'valid':
-        return Compose([
-            Resize(CFG['size'], CFG['size']),
-            Normalize(
-                mean=[0.485, 0.456, 0.406],
-                std=[0.229, 0.224, 0.225],
-            ),
-            ToTensorV2(),
-        ])
-
-class TrainDataset(Dataset):
-    def __init__(self, df, transform=None):
-        self.df = df
-        self.file_names = df['image_id'].values
-        self.labels = df['label'].values
-        self.transform = transform
-        
-    def __len__(self):
-        return len(self.df)
-
-    def __getitem__(self, idx):
-        file_name = self.file_names[idx]
-        #print(CFG['TRAIN_PATH'])
-        file_path = f"{CFG['TRAIN_PATH']}/{file_name}"
-        image = cv2.imread(file_path)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        if self.transform:
-            augmented = self.transform(image=image)
-            image = augmented['image']
-        label = torch.tensor(self.labels[idx]).long()
-        return image, label
-    
-
-
-def prepare_dataloader(df, test_split, val_split):
-    test_split = CFG['test_split']*len(df)
-    train = df.loc[test_split:,].reset_index(drop=True)
-    test_ = df.loc[:test_split,].reset_index(drop=True)
-    val_split = CFG['val_split']*len(train)
-    train_ = train.loc[val_split:,].reset_index(drop=True)
-    valid_ = train.loc[:val_split,].reset_index(drop=True)
-    
-    
-    train_ds = TrainDataset(train_, transform=get_transforms(data='train'))
-    valid_ds = TrainDataset(valid_, transform=get_transforms(data='valid'))
-    test_ds = TrainDataset(test_, transform=get_transforms(data='valid'))
-    
-    train_loader = torch.utils.data.DataLoader(
-        train_ds,
-        batch_size=CFG['train_bs'],
-        pin_memory=False,
-        drop_last=False,
-        shuffle=True,        
-        num_workers=CFG['num_workers'],
-    )
-    val_loader = torch.utils.data.DataLoader(
-        valid_ds, 
-        batch_size=CFG['valid_bs'],
-        num_workers=CFG['num_workers'],
-        shuffle=False,
-        pin_memory=False,
-    )
-    tst_loader = torch.utils.data.DataLoader(
-        test_ds, 
-        batch_size=CFG['valid_bs'],
-        num_workers=CFG['num_workers'],
-        shuffle=False,
-        pin_memory=False,
-    )
-    return train_loader, val_loader, tst_loader
 
 
 class Network(nn.Module):
@@ -136,7 +20,7 @@ class Network(nn.Module):
         self.pool = nn.MaxPool2d(kernel_size = 2, stride = 2)
         # 3 RGB channels, applying kernel size 3 with stride 1, output image size 60, output channels 16
         self.conv2 = nn.Conv2d(in_channels = 32, out_channels=16, kernel_size=3)
-        self.fc1 = nn.Linear(16*30*30, 128)
+        self.fc1 = nn.Linear(16*78*78, 128)
         self.fc2 = nn.Linear(128, 64)
         self.fc3 = nn.Linear(64, n_class)
 
@@ -192,33 +76,80 @@ def valid(model, criterion, val_loader, device):
 
 
 def main():
-    device = CFG['device']
-    df = pd.read_csv('../datasets/train.csv')
+    learning_rate = 1e-4
+    weight_decay = 1e-6
+    batch_size = 64
+    num_epochs = 100
+    image_size = 320
+    file_logger_train = "train_metrics.csv"
+    dir_images = "/home/abhishek/Desktop/deep_learning/cassava_image_classification_dataset/images/"
+    file_csv = "/home/abhishek/Desktop/deep_learning/cassava_image_classification_dataset/image_labels.csv"
+    pretrained = 1
 
-    train_loader, val_loader, test_loader = prepare_dataloader(df, CFG['test_split'], CFG['val_split'])
-    
-    model = Network(df.label.nunique())
-    
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+
+    parser.add_argument("--learning_rate", default=learning_rate,
+        type=float, help="learning rate to use for training")
+    parser.add_argument("--weight_decay", default=weight_decay,
+        type=float, help="weight decay to use for training")
+    parser.add_argument("--batch_size", default=batch_size,
+        type=int, help="batch size to use for training")
+    parser.add_argument("--pretrained", default=pretrained,
+        type=int, choices=[1, 0], help="weight initialization - 1 [pretrained] or 0 [random]")
+    parser.add_argument("--num_epochs", default=num_epochs,
+        type=int, help="num epochs to train the model")
+    parser.add_argument("--image_size", default=image_size,
+        type=int, help="image size used to train the model")
+    parser.add_argument("--file_logger_train", default=file_logger_train,
+        type=str, help="file name of the logger csv file with train losses")
+    parser.add_argument("--dir_images", default=dir_images,
+        type=str, help="full directory path to dataset containing images")
+    parser.add_argument("--file_csv", default=file_csv,
+        type=str, help="full path to csv file with image ids and labels")
+
+    FLAGS, unparsed = parser.parse_known_args()
+
     if torch.cuda.is_available():
-        model = model.cuda()
-        
-    optimizer = torch.optim.Adam(model.parameters(), lr=CFG['lr'], weight_decay=CFG['weight_decay'])
-    criterion = torch.nn.CrossEntropyLoss()
+        device = torch.device("cuda")
+    else:
+        print("CUDA device not found, so exiting....")
+        sys.exit(0)
+
     
-    validation_auc = 0
-    for epoch in range(CFG['epochs']):
+    train_x, valid_x, train_y, valid_y, num_classes = split_dataset(FLAGS.file_csv, is_for_train=True)
+    num_train_samples = len(train_x)
+    num_valid_samples = len(valid_x)
+    #print(valid_x[0:5])
+    #print(valid_y[0:5])
+    train_loader, val_loader = get_dataloaders_for_training(
+        train_x, train_y, valid_x, valid_y,
+        dir_images=FLAGS.dir_images, image_size=FLAGS.image_size, batch_size=FLAGS.batch_size,
+    )
+
+    print(f"num train samples: {num_train_samples}, num validation samples: {num_valid_samples}")
+    print(f"num classes: {num_classes}")
+
+    model = Network(num_classes) 
+    model.to(device)
+    
+    optimizer = torch.optim.Adam(model.parameters(), lr=FLAGS.learning_rate, weight_decay=FLAGS.weight_decay)
+    criterion = torch.nn.CrossEntropyLoss()
+
+    for epoch in range(FLAGS.num_epochs):
 
         train_loss , train_auc = train(model, optimizer, criterion, train_loader, device)
 
         model , val_loss, val_auc = valid(model, criterion, val_loader, device)
-        print(f"=========Epoch: {epoch+1}/{CFG['epochs']}============")
+        print(f"=========Epoch: {epoch+1}/{FLAGS.num_epochs}============")
         print(f"Train Loss: {train_loss:.4f}, Train Acc: {train_auc:.2f}")
         print(f'Validation Loss: {val_loss:.4f}, Validation Acc: {val_auc:.2f}')
             
             
             
-    _, test_loss, test_auc = valid(model, criterion, test_loader, device)
-    print(f'Test Loss: {test_loss:.4f}, Test Acc: {test_auc:.2f}')
+    # _, test_loss, test_auc = valid(model, criterion, test_loader, device)
+    # print(f'Test Loss: {test_loss:.4f}, Test Acc: {test_auc:.2f}')
 
 
 if __name__ == '__main__':
