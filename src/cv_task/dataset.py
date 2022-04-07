@@ -79,3 +79,12 @@ def get_dataloaders_for_training(train_x, train_y, valid_x, valid_y, dir_images,
         shuffle=False,
     )
     return train_loader, valid_loader
+
+def get_dataloader_for_testing(test_x, test_y, dir_images, image_size=320, batch_size=1):
+    test_dataset = LeafImageDataset(test_x, test_y, dir_images=dir_images, image_size=image_size, is_train_set=False)
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+    )
+    return test_loader
