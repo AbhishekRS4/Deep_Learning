@@ -65,7 +65,7 @@ def train_classifier(FLAGS):
         print("CUDA device not found, so exiting....")
         sys.exit(0)
 
-    train_x, valid_x, train_y, valid_y, num_classes = split_dataset(FLAGS.file_csv, is_for_train=True)
+    train_x, valid_x, train_y, valid_y, num_classes = split_dataset(FLAGS.file_labels_csv, is_for_train=True)
     num_train_samples = len(train_x)
     num_valid_samples = len(valid_x)
     #print(valid_x[0:5])
@@ -131,7 +131,7 @@ def main():
     image_size = 320
     file_logger_train = "train_metrics.csv"
     dir_images = "/home/abhishek/Desktop/deep_learning/cassava_image_classification_dataset/images/"
-    file_csv = "/home/abhishek/Desktop/deep_learning/cassava_image_classification_dataset/image_labels.csv"
+    file_labels_csv = "/home/abhishek/Desktop/deep_learning/cassava_image_classification_dataset/image_labels.csv"
     pretrained = 1
 
     parser = argparse.ArgumentParser(
@@ -154,7 +154,7 @@ def main():
         type=str, help="file name of the logger csv file with train losses")
     parser.add_argument("--dir_images", default=dir_images,
         type=str, help="full directory path to dataset containing images")
-    parser.add_argument("--file_csv", default=file_csv,
+    parser.add_argument("--file_labels_csv", default=file_labels_csv,
         type=str, help="full path to csv file with image ids and labels")
 
     FLAGS, unparsed = parser.parse_known_args()
