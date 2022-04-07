@@ -60,7 +60,7 @@ def test_classifier(FLAGS):
     print("test set evaluation metrics")
     print("***************************")
     print(f"accuracy score : {100*test_acc:.4f}")
-    print(f"f1 score : {100*test_f1:.4f}")
+    print(f"f1 score : {test_f1:.4f}")
     print("confusion matrix")
     print(test_cm)
     print("\ntesting completed")
