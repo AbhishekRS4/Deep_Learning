@@ -343,7 +343,8 @@ def main(untrained):
     cf_matrix = confusion_matrix(flat_true_labels, flat_predictions)
     cf_matrix = pd.DataFrame(cf_matrix)
     plt.figure(figsize=(10,7))
-    sns.heatmap(cf_matrix, annot=True)
+    sns.set(font_scale=1.6)
+    sns.heatmap(cf_matrix, annot=True, fmt="g")
     if untrained:
         plt.savefig('confusion_matrix_BERT_untrained.png', bbox_inches='tight')
     else:
