@@ -352,7 +352,7 @@ def main(untrained):
 
 
 if __name__ == "__main__":
-    print("\n\n----------------- untrained ------------------")
-    main(True)
-    # print("\n\n----------------- pretrained -----------------")
-    # main(False)
+    # print("\n\n----------------- untrained ------------------")
+    # main(True)
+    print("\n\n----------------- pretrained -----------------")
+    main(False)
