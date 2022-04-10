@@ -4,8 +4,12 @@
 ## CV task - Cassava Leaf disease image classification
 ***
 * In the folder [src/cv_task](src/cv_task), the models for the Cassava leaf disease image classification.
-### CNN models
-* The models can be found in [src/cv_task/models.py](src/cv_task/models.py)
+### Baseline CNN model
+* Add here
+
+### ResNet models
+* The ResNet-34 implementation can be found in [src/cv_task/models.py](src/cv_task/models.py)
+* The trained ResNet-34 models can be found in [src/cv_task/model_pretrained](src/cv_task/model_pretrained) and [src/cv_task/model_random](src/cv_task/model_random) which are pre-trained and randomly initialized models
 * Use the following to list all possible commandline parameters for training script
 ```
 python src/cv_task/train.py --help
