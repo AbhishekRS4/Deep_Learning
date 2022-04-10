@@ -1,9 +1,8 @@
 import os
 import sys
-import time
+import numpy as np
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
+from models import Network
 from dataset import split_dataset, get_dataloaders_for_training
 
 import argparse
@@ -11,27 +10,27 @@ from tqdm import tqdm
 
 
 
-class Network(nn.Module):
-    def __init__(self, n_class):
-        super().__init__()
-        # 3 RGB channels, applying kernel size 3, output image size 126, number of output channels 32 
-        self.conv1 = nn.Conv2d(in_channels = 3, out_channels=32, kernel_size=3)
-        # 3 RGB channels, applying Max Pooling size (2,2) with stride 2, output image size 62, output channels 32 
-        self.pool = nn.MaxPool2d(kernel_size = 2, stride = 2)
-        # 3 RGB channels, applying kernel size 3 with stride 1, output image size 60, output channels 16
-        self.conv2 = nn.Conv2d(in_channels = 32, out_channels=16, kernel_size=3)
-        self.fc1 = nn.Linear(16*78*78, 128)
-        self.fc2 = nn.Linear(128, 64)
-        self.fc3 = nn.Linear(64, n_class)
+# class Network(nn.Module):
+#     def __init__(self, n_class):
+#         super().__init__()
+#         # 3 RGB channels, applying kernel size 3, output image size 318, number of output channels 32 
+#         self.conv1 = nn.Conv2d(in_channels = 3, out_channels=32, kernel_size=3)
+#         # 3 RGB channels, applying Max Pooling size (2,2) with stride 2, output image size 158, output channels 32 
+#         self.pool = nn.MaxPool2d(kernel_size = 2, stride = 2)
+#         # 3 RGB channels, applying kernel size 3 with stride 1, output image size 156, output channels 16
+#         self.conv2 = nn.Conv2d(in_channels = 32, out_channels=16, kernel_size=3)
+#         self.fc1 = nn.Linear(16*78*78, 128)
+#         self.fc2 = nn.Linear(128, 64)
+#         self.fc3 = nn.Linear(64, n_class)
 
-    def forward(self,x):
-        x = self.pool(F.relu(self.conv1(x)))
-        x = self.pool(F.relu(self.conv2(x)))
-        x = torch.flatten(x, 1) # flatten all dimensions except batch
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
-        return x
+#     def forward(self,x):
+#         x = self.pool(F.relu(self.conv1(x)))
+#         x = self.pool(F.relu(self.conv2(x)))
+#         x = torch.flatten(x, 1) # flatten all dimensions except batch
+#         x = F.relu(self.fc1(x))
+#         x = F.relu(self.fc2(x))
+#         x = self.fc3(x)
+#         return x
 
 
 def train(model, optimizer,criterion, train_loader, device):
@@ -82,10 +81,10 @@ def main():
     num_epochs = 100
     image_size = 320
     file_logger_train = "train_metrics.csv"
-    dir_images = "/home/abhishek/Desktop/deep_learning/cassava_image_classification_dataset/images/"
-    file_csv = "/home/abhishek/Desktop/deep_learning/cassava_image_classification_dataset/image_labels.csv"
+    dir_images = "./datasets/train_images"
+    file_csv = "./datasets/train.csv"
     pretrained = 1
-
+    patience = 3
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
@@ -96,8 +95,10 @@ def main():
         type=float, help="weight decay to use for training")
     parser.add_argument("--batch_size", default=batch_size,
         type=int, help="batch size to use for training")
+    parser.add_argument("--patience", default=patience,
+        type=int, help="Patience used to stop training if model does not improve Default 5")
     parser.add_argument("--pretrained", default=pretrained,
-        type=int, choices=[1, 0], help="weight initialization - 1 [pretrained] or 0 [random]")
+        type=int, choices=[1, 0], help="weight initialization - 1 [pretrained] or 0 [random]")    
     parser.add_argument("--num_epochs", default=num_epochs,
         type=int, help="num epochs to train the model")
     parser.add_argument("--image_size", default=image_size,
@@ -137,17 +138,35 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=FLAGS.learning_rate, weight_decay=FLAGS.weight_decay)
     criterion = torch.nn.CrossEntropyLoss()
 
+    pytorch_total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+    print(f"Total Trainable Parameters {pytorch_total_params}")
+    validation_loss = np.inf
+    count = FLAGS.patience
+    model_dir = "base_model"
+    if not os.path.isdir(model_dir):
+        print(f"Creating directory: {model_dir}")
+        os.makedirs(model_dir)
+
+        
     for epoch in range(FLAGS.num_epochs):
+        if count != 0:
+            print(f"=========Epoch: {epoch+1}/{FLAGS.num_epochs}============")
+            train_loss , train_auc = train(model, optimizer, criterion, train_loader, device)
 
-        train_loss , train_auc = train(model, optimizer, criterion, train_loader, device)
-
-        model , val_loss, val_auc = valid(model, criterion, val_loader, device)
-        print(f"=========Epoch: {epoch+1}/{FLAGS.num_epochs}============")
-        print(f"Train Loss: {train_loss:.4f}, Train Acc: {train_auc:.2f}")
-        print(f'Validation Loss: {val_loss:.4f}, Validation Acc: {val_auc:.2f}')
+            model , val_loss, val_auc = valid(model, criterion, val_loader, device)
             
-            
-            
+            print(f"Train Loss: {train_loss:.4f}, Train Acc: {train_auc:.2f}")
+            print(f'Validation Loss: {val_loss:.4f}, Validation Acc: {val_auc:.2f}')
+            if val_loss <= validation_loss:
+                torch.save(model.state_dict(), os.path.join(model_dir, "base_model_best.pt"))
+                validation_loss = val_loss
+                count = FLAGS.patience
+            else:
+                count -= 1
+        else:
+            print("Model not Updating... Stopped!!!!")
+            break
     # _, test_loss, test_auc = valid(model, criterion, test_loader, device)
     # print(f'Test Loss: {test_loss:.4f}, Test Acc: {test_auc:.2f}')
 

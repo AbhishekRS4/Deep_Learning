@@ -1,6 +1,8 @@
 import torch
 import torchvision
 import torch.nn as nn
+
+import torch.nn.functional as F
 from torchvision.models import resnet34
 
 class ResNetFeatureExtractor(nn.Module):
@@ -29,6 +31,29 @@ class ResNetFeatureExtractor(nn.Module):
         self.block4 = self.resnet34.layer3(self.block3)  # [256, H/16, W/16]
         self.block5 = self.resnet34.layer4(self.block4)  # [512, H/32, W/32]
         return self.block5
+
+
+class Network(nn.Module):
+    def __init__(self, num_classes=5):
+        super().__init__()
+        # 3 RGB channels, applying kernel size 3, output image size 318, number of output channels 32 
+        self.conv1 = nn.Conv2d(in_channels = 3, out_channels=32, kernel_size=3)
+        # 3 RGB channels, applying Max Pooling size (2,2) with stride 2, output image size 158, output channels 32 
+        self.pool = nn.MaxPool2d(kernel_size = 2, stride = 2)
+        # 3 RGB channels, applying kernel size 3 with stride 1, output image size 156, output channels 16
+        self.conv2 = nn.Conv2d(in_channels = 32, out_channels=16, kernel_size=3)
+        self.fc1 = nn.Linear(16*78*78, 128)
+        self.fc2 = nn.Linear(128, 64)
+        self.fc3 = nn.Linear(64, num_classes)
+
+    def forward(self,x):
+        x = self.pool(F.relu(self.conv1(x)))
+        x = self.pool(F.relu(self.conv2(x)))
+        x = torch.flatten(x, 1) # flatten all dimensions except batch
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = self.fc3(x)
+        return x
 
 class ResNetImageClassififer(nn.Module):
     def __init__(self, num_classes=5, pretrained=True):

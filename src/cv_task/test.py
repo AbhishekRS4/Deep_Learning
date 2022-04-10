@@ -7,8 +7,9 @@ import numpy as np
 import torchvision
 import torch.nn as nn
 import torch.nn.functional as F
+from tqdm import tqdm
 
-from models import ResNetImageClassififer
+from models import ResNetImageClassififer, Network
 from dataset import split_dataset, get_dataloader_for_testing
 from sklearn.metrics import confusion_matrix, accuracy_score, f1_score
 
@@ -18,7 +19,7 @@ def test(model, test_loader, device):
     num_test_batches = len(test_loader)
     test_pred_labels = []
 
-    for data, label in test_loader:
+    for data, label in tqdm(test_loader):
         data = data.to(device, dtype=torch.float)
         logits = model(data)
         pred_probs = F.softmax(logits, dim=1)
@@ -45,12 +46,16 @@ def test_classifier(FLAGS):
     print("\ntest set details")
     print(f"num test samples: {num_test_samples}")
     print(f"num classes: {num_classes}")
-
-    print("\ntesting started")
     print(f"model file used : {FLAGS.file_model}")
-    model = ResNetImageClassififer(num_classes=num_classes, pretrained=True)
+    print("\ntesting started")
+    if FLAGS.base_model.lower() == "true":
+        model = Network(num_classes=num_classes)
+        
+    else:
+        model = ResNetImageClassififer(num_classes=num_classes, pretrained=True)
     model.to(device)
     model.load_state_dict(torch.load(FLAGS.file_model))
+
     test_pred_labels = test(model, test_loader, device)
 
     test_acc = accuracy_score(test_y, test_pred_labels)
@@ -68,9 +73,10 @@ def test_classifier(FLAGS):
 
 def main():
     image_size = 320
-    dir_images = "/home/abhishek/Desktop/deep_learning/cassava_image_classification_dataset/images/"
-    file_model = "model_pretrained/pretrained_10.pt"
-    file_labels_csv = "/home/abhishek/Desktop/deep_learning/cassava_image_classification_dataset/image_labels.csv"
+    dir_images = "datasets/train_images/"
+    file_model = "base_model/base_model_best.pt"
+    file_labels_csv = "datasets/train.csv"
+    base = "False"
 
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
@@ -84,6 +90,8 @@ def main():
         type=str, help="full path to model file")
     parser.add_argument("--file_labels_csv", default=file_labels_csv,
         type=str, help="full path to csv file with image ids and labels")
+    parser.add_argument("--base_model", default=base,
+        type=str, help="Want to test model or not. Expected value true or false")        
 
     FLAGS, unparsed = parser.parse_known_args()
     test_classifier(FLAGS)
