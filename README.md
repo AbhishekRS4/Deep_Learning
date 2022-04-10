@@ -1,4 +1,4 @@
-# Deep Learning Project
+# A Comparison between Pretrained and Raw Model Based on Image and Sequence Data
 ***
 
 ## CV task - Cassava Leaf disease image classification
