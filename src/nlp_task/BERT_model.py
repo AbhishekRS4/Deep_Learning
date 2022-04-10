@@ -343,7 +343,8 @@ def main(untrained):
     cf_matrix = confusion_matrix(flat_true_labels, flat_predictions)
     cf_matrix = pd.DataFrame(cf_matrix)
     plt.figure(figsize=(10,7))
-    sns.heatmap(cf_matrix, annot=True)
+    sns.set(font_scale=1.6)
+    sns.heatmap(cf_matrix, annot=True, fmt="g")
     if untrained:
         plt.savefig('confusion_matrix_BERT_untrained.png', bbox_inches='tight')
     else:
@@ -351,7 +352,10 @@ def main(untrained):
 
 
 if __name__ == "__main__":
-    print("\n\n----------------- untrained ------------------")
-    main(True)
-    # print("\n\n----------------- pretrained -----------------")
-    # main(False)
+    # uncomment these lines to run an untrained BERT model
+    # print("\n\n----------------- untrained ------------------")
+    # main(True)
+
+    # uncomment these lines to run an pretrained BERT model using bert-base-uncased
+    print("\n\n----------------- pretrained -----------------")
+    main(False)
