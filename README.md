@@ -3,7 +3,7 @@
 
 ## CV task - Cassava Leaf disease image classification
 ***
-In the folder [src/cv_task](src/cv_task), the models for the Cassava leaf disease image classification.
+* In the folder [src/cv_task](src/cv_task), the models for the Cassava leaf disease image classification.
 ### CNN models
 * The models can be found in [src/cv_task/models.py](src/cv_task/models.py)
 * Use the following to list all possible commandline parameters for training script
