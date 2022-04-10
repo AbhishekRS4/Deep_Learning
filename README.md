@@ -1,9 +1,11 @@
 # A Comparison between Pretrained and Raw Model Based on Image and Sequence Data
 ***
 
-## CV task - Cassava Leaf disease image classification
+## Computer Vision - Cassava Leaf disease image classification
 ***
-* In the folder [src/cv_task](src/cv_task), the models for the Cassava leaf disease image classification.
+### Dataset
+* The dataset can be downloaded from [here](https://drive.google.com/drive/folders/1lUbw3zgpPhdPXsPaedzGXybK33jTWExT?usp=sharing)
+
 ### Baseline CNN model
 * The Base model can be found in [src/cv_task/models.py](src/cv_task/models.py)
 * Base trained model can be found in [src/cv_task/base_model](src/cv_task/base_model)
@@ -29,7 +31,7 @@ python src/cv_task/test.py
 ```
 * To generate various plots, the following jupyter notebook [src/cv_task/plot_graphs.ipynb](src/cv_task/plot_graphs.ipynb) is useful
 
-## NLP task - semantic analysis on tweet dataset regarding Coronavirus
+## Natual Language Processing - semantic analysis on tweet dataset regarding Coronavirus
 ***
 * In the folder of the [src/nlp_task](src/nlp_task), you will find models for semantic analysis on a tweet dataset regarding the Coronavirus.
 * The semantic analysis is performed using a pretrained version of the BERT model and an untrained version of it, as well
