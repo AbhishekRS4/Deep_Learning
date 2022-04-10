@@ -12,7 +12,7 @@ The semantic analysis is performed using a pretrained version of the BERT model 
 as a baseline LSTM model.
 
 ### LSTM model
-TBD
+The baseline model can be found in the ```base_lstm_model.py``` file. The program can easily be run by running ```python base_lstm_model.py```. It will print some data statistics, a model summary, a classification report and it will generate a confusion matrix in the directory that this file is run from.
 
 ### BERT model
 The BERT model can be found in the ```BERT_model.py``` file. The model is designed using the Google colab notebook 
