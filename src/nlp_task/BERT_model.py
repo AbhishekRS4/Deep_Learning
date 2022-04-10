@@ -352,7 +352,10 @@ def main(untrained):
 
 
 if __name__ == "__main__":
+    # uncomment these lines to run an untrained BERT model
     # print("\n\n----------------- untrained ------------------")
     # main(True)
+
+    # uncomment these lines to run an pretrained BERT model using bert-base-uncased
     print("\n\n----------------- pretrained -----------------")
     main(False)
