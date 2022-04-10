@@ -1,5 +1,6 @@
-# A Comparison between Pretrained and Raw Model Based on Image and Sequence Data
+# A Comparison study of Pre-trained and randomly initialized models on Image and Sequence Data
 ***
+* This repo contains the final project for the Master's course [Deep Learning](https://www-rug-nl.proxy-ub.rug.nl/ocasys/fwn/vak/show?code=WMAI017-05) at University of Groningen
 
 ## Computer Vision - Cassava Leaf disease image classification
 ***
